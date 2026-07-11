@@ -7,7 +7,7 @@
 
 🏆 **GW New Venture Competition Semifinalist**
 
-[Live MVP](https://veribuy.vercel.app) · GWU CS Team
+[Live MVP](https://veribuy.vercel.app) · Built by Yusra Faheem, GWU CS '28
 
 </div>
 
@@ -92,7 +92,7 @@ Premium funds trust and utility. Core discovery stays free.
 - **Affiliates — 25%**: ~7% real Sephora/Rakuten-style affiliate rate, 24-hour cookie window
 - **Ethical partnerships — 10%**: vendors can respond to reviews — *no sponsored content in discovery, ever*
 
-![Freemium Model That Aligs with Trust](docs/pitch-deck/05-business-model.jpg)
+![Freemium Model That Aligns with Trust](docs/pitch-deck/05-business-model.jpg)
 
 **Unit economics — every number shown, bottom-up:**
 
@@ -111,21 +111,11 @@ Premium funds trust and utility. Core discovery stays free.
 
 ---
 
-## Team
-
-### GWU Team That Lives + Solves the Problem
+## Founder
 
 **MVP live:** [veribuy.vercel.app](https://veribuy.vercel.app)
 
-![GWU Team That Lives + Solves the Problem](docs/pitch-deck/06-team.jpg)
-
-| | | |
-|---|---|---|
-| **Yusra Faheem**<br/>Founder & CEO | Leads product strategy, platform development, and the company's financial and growth strategy — lives the problem daily. | GWU CS '28 · Accounting minor |
-| **Muhammad Musa Ahmed**<br/>CTO | Built the website. Owns scalable ML + integrations; guarantees fraud detection. | ML · Backend · Privacy |
-| **Samuel Diaz-Miranda**<br/>Head of Ops & Partnerships | HR experience builds retailer relationships. | GWU Political Science |
-
-George Washington University.
+**Yusra Faheem** — Founder & CEO. Leads product strategy, platform development, and the company's financial and growth strategy — lives the problem daily. GWU CS '28 · Accounting minor.
 
 ---
 
