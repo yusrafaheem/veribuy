@@ -431,7 +431,13 @@ function showHistory(filteredIndex) {
   if (details) details.open = true;
 }
 
-function showReviews(filteredIndex) {
+function productKeyFor(item) {
+  const src = (item.source || "").trim().toLowerCase();
+  const title = (item.title || "").trim().toLowerCase();
+  return `${src}::${title}`;
+}
+
+async function showReviews(filteredIndex) {
   const item = state.filtered[filteredIndex];
   const box = document.getElementById(`reviews-${filteredIndex}`);
   if (!item || !box) return;
@@ -442,21 +448,162 @@ function showReviews(filteredIndex) {
     return;
   }
 
+  box.style.display = "block";
+  box.innerHTML = `<div class="small">Loading reviews…</div>`;
+
+  await renderReviewsBox(filteredIndex, item, box);
+}
+
+async function renderReviewsBox(filteredIndex, item, box) {
+  const productKey = productKeyFor(item);
+
+  let reviews = [];
+  let loadError = null;
+
+  if (sb) {
+    const { data, error } = await sb
+      .from("reviews")
+      .select("id, rating, body, photo_url, purchased_attested, created_at, user_id")
+      .eq("product_key", productKey)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (error) loadError = error.message;
+    else reviews = data || [];
+  }
+
+  const count = reviews.length;
+  const avg = count ? (reviews.reduce((s, r) => s + r.rating, 0) / count) : null;
+
+  const { data: { session } } = sb ? await sb.auth.getSession() : { data: { session: null } };
+  const user = session?.user || null;
+
+  const listHtml = !sb
+    ? `<div class="small">Reviews aren't available right now (auth not configured).</div>`
+    : loadError
+    ? `<div class="small">Couldn't load reviews: ${escapeHtml(loadError)}</div>`
+    : !count
+    ? `<div class="small">No photo-verified reviews yet. Be the first.</div>`
+    : reviews.map(r => `
+        <div class="panel mini" style="margin-bottom:8px;">
+          <div class="row" style="align-items:flex-start;">
+            <div>
+              <div><b>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</b> ${r.purchased_attested && r.photo_url ? `<span class="badge good">Photo-verified</span>` : ""}</div>
+              ${r.body ? `<div class="small" style="margin-top:4px;">${escapeHtml(r.body)}</div>` : ""}
+              <div class="small" style="margin-top:4px; color:rgba(255,255,255,.45);">${new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
+            </div>
+            ${r.photo_url ? `<img src="${r.photo_url}" alt="" style="width:56px;height:56px;border-radius:12px;object-fit:cover;border:1px solid rgba(255,255,255,.14);" />` : ""}
+          </div>
+        </div>
+      `).join("");
+
+  const summaryHtml = count
+    ? `<div class="small" style="margin-bottom:10px;">${avg.toFixed(1)}★ average · ${count} photo-verified review${count === 1 ? "" : "s"}</div>`
+    : "";
+
+  const formHtml = !sb
+    ? ""
+    : !user
+    ? `<div class="small" style="margin-top:10px;">Log in above to leave a photo-verified review.</div>`
+    : `
+      <div class="panel mini" style="margin-top:10px;">
+        <h4>Leave a photo-verified review</h4>
+        <div class="small" style="margin-bottom:8px;">A real photo and purchase confirmation are required — this is what "Photo-verified" means on Veribuy.</div>
+        <div class="chips" style="margin-bottom:8px;">
+          <select id="reviewRating-${filteredIndex}" class="input" style="max-width:140px;">
+            <option value="5">5 ★★★★★</option>
+            <option value="4">4 ★★★★</option>
+            <option value="3">3 ★★★</option>
+            <option value="2">2 ★★</option>
+            <option value="1">1 ★</option>
+          </select>
+        </div>
+        <textarea id="reviewBody-${filteredIndex}" class="input" placeholder="What did you think? (optional)" style="min-height:60px; margin-bottom:8px;"></textarea>
+        <div class="chips" style="margin-bottom:8px; align-items:center;">
+          <input id="reviewPhoto-${filteredIndex}" type="file" accept="image/*" />
+        </div>
+        <label class="chip chk" style="margin-bottom:8px;">
+          <input id="reviewPurchased-${filteredIndex}" type="checkbox" />
+          I purchased this item
+        </label>
+        <div class="small" id="reviewError-${filteredIndex}" style="color:rgba(251,113,133,.9); margin-bottom:8px;"></div>
+        <button class="btn primary" data-submit-review="${filteredIndex}">Submit review</button>
+      </div>
+    `;
+
   box.innerHTML = `
     <div class="panel mini">
-      <h4 style="margin-bottom:8px;">Reviews for ${escapeHtml(item.title)}</h4>
-      <div style="padding:10px; border-radius:12px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08);">
-        <div><b>No reviews yet</b></div>
-        <div style="margin-top:4px;">
-          Reviews will appear here once user accounts and commenting are added.
-        </div>
-      </div>
+      <h4 style="margin-bottom:8px;">Photo-verified reviews for ${escapeHtml(item.title)}</h4>
+      ${summaryHtml}
+      ${listHtml}
+      ${formHtml}
     </div>
   `;
 
-  box.style.display = "block";
+  box.querySelector(`[data-submit-review="${filteredIndex}"]`)?.addEventListener("click", () => submitReview(filteredIndex, item, box));
 }
 
+async function submitReview(filteredIndex, item, box) {
+  const errorEl = document.getElementById(`reviewError-${filteredIndex}`);
+  errorEl && (errorEl.textContent = "");
+
+  if (!sb) return;
+
+  const { data: { session } } = await sb.auth.getSession();
+  const user = session?.user;
+  if (!user) {
+    errorEl && (errorEl.textContent = "Log in to submit a review.");
+    return;
+  }
+
+  const rating = Number(document.getElementById(`reviewRating-${filteredIndex}`)?.value || 5);
+  const body = (document.getElementById(`reviewBody-${filteredIndex}`)?.value || "").trim();
+  const purchased = !!document.getElementById(`reviewPurchased-${filteredIndex}`)?.checked;
+  const fileInput = document.getElementById(`reviewPhoto-${filteredIndex}`);
+  const file = fileInput?.files?.[0];
+
+  if (!purchased) {
+    errorEl && (errorEl.textContent = 'Check "I purchased this item" to submit a photo-verified review.');
+    return;
+  }
+  if (!file) {
+    errorEl && (errorEl.textContent = "A photo of the product is required for a photo-verified review.");
+    return;
+  }
+
+  errorEl && (errorEl.textContent = "Uploading…");
+
+  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+  const id = (globalThis.crypto?.randomUUID?.() || String(Date.now()));
+  const path = `${user.id}/${id}.${ext}`;
+
+  const { error: uploadError } = await sb.storage.from("review-photos").upload(path, file, { upsert: false });
+  if (uploadError) {
+    errorEl && (errorEl.textContent = `Photo upload failed: ${uploadError.message}`);
+    return;
+  }
+
+  const { data: pub } = sb.storage.from("review-photos").getPublicUrl(path);
+  const photoUrl = pub?.publicUrl;
+
+  const { error: insertError } = await sb.from("reviews").insert({
+    user_id: user.id,
+    product_key: productKeyFor(item),
+    product_title: item.title,
+    product_source: item.source || null,
+    rating,
+    body: body || null,
+    photo_url: photoUrl,
+    purchased_attested: true
+  });
+
+  if (insertError) {
+    errorEl && (errorEl.textContent = `Couldn't save review: ${insertError.message}`);
+    return;
+  }
+
+  await renderReviewsBox(filteredIndex, item, box);
+}
 function generateHistory(currentPrice) {
   const notes = ["Stable", "Small dip", "Small rise", "Promo week", "Low stock", "Weekend drop", "Restock", "Trending"];
   const arr = [];
