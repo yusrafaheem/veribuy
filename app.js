@@ -479,6 +479,129 @@ function generateHistory(currentPrice) {
   return arr;
 }
 
+/* Auth (Supabase) */
+let sb = null;
+
+async function initAuth() {
+  const authOut = el("authOut");
+  try {
+    const r = await fetch("/api/config");
+    const cfg = await r.json();
+
+    if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
+      authOut && (authOut.textContent = "Auth not configured yet (missing Supabase env vars in Vercel).");
+      return;
+    }
+
+    sb = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
+
+    sb.auth.onAuthStateChange((_event, session) => {
+      renderAuthState(session);
+    });
+
+    const { data: { session } } = await sb.auth.getSession();
+    renderAuthState(session);
+  } catch (e) {
+    authOut && (authOut.textContent = "Auth failed to load.");
+    console.error("initAuth error:", e);
+  }
+}
+
+function renderAuthState(session) {
+  const authOut = el("authOut");
+  const btnSignUp = el("btnSignUp");
+  const btnSignIn = el("btnSignIn");
+  const btnSignOut = el("btnSignOut");
+  const toggle = el("subscribedToggle");
+
+  const user = session?.user || null;
+
+  if (authOut) {
+    authOut.textContent = user ? `Logged in as ${user.email}` : "Not logged in.";
+  }
+
+  if (btnSignUp) btnSignUp.style.display = user ? "none" : "";
+  if (btnSignIn) btnSignIn.style.display = user ? "none" : "";
+  if (btnSignOut) btnSignOut.style.display = user ? "" : "none";
+
+  if (toggle && user) {
+    const subscribed = user.user_metadata?.subscribed;
+    toggle.checked = subscribed !== false;
+  }
+}
+
+async function signUp() {
+  if (!sb) return alert("Auth isn't ready yet. Try again in a moment.");
+  const email = (el("authEmail")?.value || "").trim();
+  const password = el("authPassword")?.value || "";
+  const authOut = el("authOut");
+
+  if (!email || !password) {
+    authOut && (authOut.textContent = "Enter an email and password to sign up.");
+    return;
+  }
+
+  authOut && (authOut.textContent = "Signing up…");
+  const { data, error } = await sb.auth.signUp({ email, password });
+
+  if (error) {
+    authOut && (authOut.textContent = `Sign up failed: ${error.message}`);
+    return;
+  }
+
+  authOut && (authOut.textContent = data.session
+    ? `Signed up and logged in as ${data.user.email}.`
+    : "Check your email to confirm your account.");
+
+  renderAuthState(data.session);
+}
+
+async function signIn() {
+  if (!sb) return alert("Auth isn't ready yet. Try again in a moment.");
+  const email = (el("authEmail")?.value || "").trim();
+  const password = el("authPassword")?.value || "";
+  const authOut = el("authOut");
+
+  if (!email || !password) {
+    authOut && (authOut.textContent = "Enter an email and password to log in.");
+    return;
+  }
+
+  authOut && (authOut.textContent = "Logging in…");
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+
+  if (error) {
+    authOut && (authOut.textContent = `Log in failed: ${error.message}`);
+    return;
+  }
+
+  renderAuthState(data.session);
+}
+
+async function signOut() {
+  if (!sb) return;
+  await sb.auth.signOut();
+  renderAuthState(null);
+}
+
+async function saveSubscription() {
+  if (!sb) return alert("Auth isn't ready yet. Try again in a moment.");
+  const { data: { session } } = await sb.auth.getSession();
+  const authOut = el("authOut");
+
+  if (!session?.user) {
+    authOut && (authOut.textContent = "Log in first to save your preference.");
+    return;
+  }
+
+  const subscribed = !!el("subscribedToggle")?.checked;
+  const { error } = await sb.auth.updateUser({ data: { subscribed } });
+
+  authOut && (authOut.textContent = error
+    ? `Couldn't save preference: ${error.message}`
+    : `Preference saved: ${subscribed ? "receiving updates" : "updates off"}.`);
+}
+
 /* Live search */
 async function runSearch(query) {
   const q = (query || "").trim();
@@ -531,6 +654,11 @@ function init() {
   });
 
   el("btnSaveAlert")?.addEventListener("click", saveAlert);
+  el("btnSignUp")?.addEventListener("click", signUp);
+  el("btnSignIn")?.addEventListener("click", signIn);
+  el("btnSignOut")?.addEventListener("click", signOut);
+  el("btnSaveSubscription")?.addEventListener("click", saveSubscription);
+  initAuth();
 
   renderWishlist();
   renderAlerts();
