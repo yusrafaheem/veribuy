@@ -171,8 +171,9 @@ function renderResults() {
 
   out.innerHTML = state.filtered.map((it, idx) => {
     const t = trustSignal(it, strict);
-    const discounted = (state.coupon && typeof it.price === "number")
-      ? Math.max(0, it.price - state.coupon.amount)
+    const discAmt = state.coupon ? couponDiscountFor(it, state.coupon) : 0;
+    const discounted = (state.coupon && typeof it.price === "number" && discAmt > 0)
+      ? Math.max(0, it.price - discAmt)
       : null;
 
     const priceLine = discounted !== null
@@ -253,7 +254,10 @@ function renderCompare() {
   body.innerHTML = top.map(it => {
     const t = trustSignal(it, strict);
     const trustLabel = t.tone === "good" ? "Trusted" : t.tone === "warn" ? "Mixed" : "Flagged";
-    const coupon = state.coupon ? (state.coupon.verified ? "Verified applied" : "Unverified") : "—";
+    const discAmt = state.coupon ? couponDiscountFor(it, state.coupon) : 0;
+    const coupon = (state.coupon && discAmt > 0)
+      ? (state.coupon.status === "verified" ? "Verified applied" : state.coupon.status === "expired" ? "Reported not working" : "Unverified")
+      : "—";
 
     return `
       <tr>
@@ -311,36 +315,192 @@ function renderWishlist() {
   });
 }
 
-/* Coupon demo */
-function applyCoupon(code) {
+/* Coupons (crowd-verified) */
+function couponDiscountFor(item, coupon) {
+  if (!coupon) return 0;
+  if (coupon.retailer && coupon.retailer !== "any" && (item.source || "").toLowerCase() !== coupon.retailer.toLowerCase()) {
+    return 0;
+  }
+  const price = typeof item.price === "number" ? item.price : 0;
+  if (coupon.discount_type === "percent") return price * (coupon.discount_value / 100);
+  return coupon.discount_value;
+}
+
+function couponStatusBadge(status) {
+  if (status === "verified") return `<span class="badge good">Verified</span>`;
+  if (status === "expired") return `<span class="badge bad">Reported not working</span>`;
+  return `<span class="badge warn">Unverified</span>`;
+}
+
+function couponSubmitFormHtml(prefillCode) {
+  return `
+    <div class="panel mini" style="margin-top:8px;">
+      <h4>Submit a code</h4>
+      <div class="chips" style="margin-bottom:8px;">
+        <input id="newCouponCode" class="input" placeholder="Code" value="${escapeHtml(prefillCode)}" style="max-width:140px;" />
+        <input id="newCouponRetailer" class="input" placeholder="Retailer (blank = any)" style="max-width:200px;" />
+        <select id="newCouponType" class="input" style="max-width:110px;">
+          <option value="percent">% off</option>
+          <option value="fixed">$ off</option>
+        </select>
+        <input id="newCouponValue" class="input" type="number" min="0" step="0.01" placeholder="Amount" style="max-width:100px;" />
+      </div>
+      <input id="newCouponDesc" class="input" placeholder="Notes (optional)" style="margin-bottom:8px;" />
+      <div class="small" id="newCouponOut"></div>
+      <button class="btn primary" id="btnSubmitCoupon" style="margin-top:8px;">Submit code</button>
+    </div>
+  `;
+}
+
+async function applyCoupon(code) {
   const c = (code || "").trim().toUpperCase();
   const out = el("couponOut");
+  if (!out) return;
 
   if (!c) {
     state.coupon = null;
-    out && (out.textContent = "Enter a code to see verified/unverified behavior.");
+    out.innerHTML = `<div class="small">Enter a code to look it up.</div>`;
     applyFilters();
     return;
   }
 
-  const rules = {
-    VERIBUY5: { amount: 0.75, verified: true, msg: "Verified coupon applied (demo)." },
-    WELCOME: { amount: 0.50, verified: true, msg: "Verified welcome coupon applied (demo)." },
-    SAVE10: { amount: 1.00, verified: false, msg: "Found, but not verified for all sellers (demo)." }
+  if (!sb) {
+    out.innerHTML = `<div class="small">Coupon lookup isn't available right now (auth not configured).</div>`;
+    return;
+  }
+
+  out.innerHTML = `<div class="small">Looking up "${escapeHtml(c)}"…</div>`;
+
+  const { data, error } = await sb
+    .from("coupon_stats")
+    .select("coupon_id, code, retailer, discount_type, discount_value, description, total_reports, worked_reports, status")
+    .ilike("code", c)
+    .order("total_reports", { ascending: false });
+
+  if (error) {
+    out.innerHTML = `<div class="small">Lookup failed: ${escapeHtml(error.message)}</div>`;
+    return;
+  }
+
+  if (!data || !data.length) {
+    state.coupon = null;
+    out.innerHTML = `
+      <div class="small">No one has submitted "${escapeHtml(c)}" yet. Be the first.</div>
+      ${couponSubmitFormHtml(c)}
+    `;
+    el("btnSubmitCoupon")?.addEventListener("click", submitCoupon);
+    applyFilters();
+    return;
+  }
+
+  const best = data[0];
+  state.coupon = {
+    code: best.code,
+    retailer: best.retailer,
+    discount_type: best.discount_type,
+    discount_value: Number(best.discount_value),
+    status: best.status
   };
 
-  const coupon = rules[c];
+  const { data: { session } } = await sb.auth.getSession();
+  const user = session?.user || null;
 
-  if (!coupon) {
-    state.coupon = { amount: 0.0, verified: false, code: c };
-    out && (out.textContent = `Code "${c}" not found (demo).`);
-    applyFilters();
+  const rowsHtml = data.map(row => {
+    const amountText = row.discount_type === "percent"
+      ? `${row.discount_value}% off`
+      : `$${Number(row.discount_value).toFixed(2)} off`;
+
+    return `
+      <div class="panel mini" style="margin-bottom:8px;">
+        <div class="row">
+          <div>
+            <b>${escapeHtml(row.code)}</b> · ${escapeHtml(row.retailer === "any" ? "Any retailer" : row.retailer)} · ${amountText}
+            ${couponStatusBadge(row.status)}
+          </div>
+        </div>
+        ${row.description ? `<div class="small" style="margin-top:4px;">${escapeHtml(row.description)}</div>` : ""}
+        <div class="small" style="margin-top:4px; color:rgba(255,255,255,.45);">
+          ${row.worked_reports}/${row.total_reports} reports say it worked (last 30 days)
+        </div>
+        ${user ? `
+          <div class="chips" style="margin-top:8px;">
+            <button class="btn" data-report="${row.coupon_id}" data-worked="true">It worked</button>
+            <button class="btn" data-report="${row.coupon_id}" data-worked="false">Didn't work</button>
+          </div>
+        ` : `<div class="small" style="margin-top:8px;">Log in above to report whether this worked.</div>`}
+      </div>
+    `;
+  }).join("");
+
+  out.innerHTML = `${rowsHtml}${couponSubmitFormHtml(c)}`;
+
+  out.querySelectorAll("[data-report]").forEach(btn => {
+    btn.addEventListener("click", () => reportCoupon(btn.getAttribute("data-report"), btn.getAttribute("data-worked") === "true", c));
+  });
+
+  el("btnSubmitCoupon")?.addEventListener("click", submitCoupon);
+  applyFilters();
+}
+
+async function submitCoupon() {
+  const out = el("newCouponOut");
+  if (!sb) return;
+
+  const { data: { session } } = await sb.auth.getSession();
+  const user = session?.user;
+  if (!user) {
+    out && (out.textContent = "Log in above to submit a code.");
     return;
   }
 
-  state.coupon = { ...coupon, code: c };
-  out && (out.textContent = `${coupon.msg} Discount: $${coupon.amount.toFixed(2)}`);
-  applyFilters();
+  const code = (el("newCouponCode")?.value || "").trim().toUpperCase();
+  const retailer = (el("newCouponRetailer")?.value || "").trim().toLowerCase() || "any";
+  const discount_type = el("newCouponType")?.value || "percent";
+  const discount_value = Number(el("newCouponValue")?.value || 0);
+  const description = (el("newCouponDesc")?.value || "").trim();
+
+  if (!code) {
+    out && (out.textContent = "Enter a code.");
+    return;
+  }
+  if (!discount_value || discount_value <= 0) {
+    out && (out.textContent = "Enter a discount amount greater than 0.");
+    return;
+  }
+
+  out && (out.textContent = "Submitting…");
+
+  const { error } = await sb.from("coupons").insert({
+    code,
+    retailer,
+    discount_type,
+    discount_value,
+    description: description || null,
+    submitted_by: user.id
+  });
+
+  if (error) {
+    out && (out.textContent = error.code === "23505"
+      ? "That code + retailer combo already exists."
+      : `Couldn't submit: ${error.message}`);
+    return;
+  }
+
+  await applyCoupon(code);
+}
+
+async function reportCoupon(couponId, worked, lookupCode) {
+  if (!sb) return;
+  const { data: { session } } = await sb.auth.getSession();
+  const user = session?.user;
+  if (!user) return;
+
+  const { error } = await sb.from("coupon_reports").upsert(
+    { coupon_id: couponId, user_id: user.id, worked },
+    { onConflict: "coupon_id,user_id" }
+  );
+
+  if (!error) await applyCoupon(lookupCode);
 }
 
 /* Alerts */
