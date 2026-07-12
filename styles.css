@@ -379,3 +379,34 @@ mark{
   .tabBtn{padding:8px 10px;font-size:12.5px;white-space:nowrap}
 }
 
+.exploreFeed{
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;
+}
+.explorePost{
+  border-radius:var(--radius-lg);
+  background:var(--surface);
+  border:1px solid var(--line);
+  box-shadow:var(--shadow);
+  overflow:hidden;
+  display:flex;flex-direction:column;
+}
+.explorePost-media{
+  width:100%;aspect-ratio:1/1;
+  background:var(--brand-tint);
+  overflow:hidden;
+}
+.explorePost-media img,.explorePost-media video{
+  width:100%;height:100%;object-fit:cover;display:block;
+}
+.explorePost-body{padding:14px}
+.explorePost-caption{font-size:13.5px;color:var(--ink);margin:0 0 10px}
+.explorePost-actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.explorePost-actions .iconbtn.active{background:var(--brand-tint);color:var(--brand-dark);border-color:var(--brand-tint-strong)}
+.explorePost-actions .iconbtn.active svg{fill:currentColor}
+.explorePost-meta{font-size:11.5px;color:var(--ink-faint);margin-bottom:8px}
+.explorePost-comments{border-top:1px solid var(--line-soft);padding-top:10px;margin-top:4px}
+.explorePost-comment{font-size:12.5px;color:var(--ink-soft);margin:0 0 8px}
+.explorePost-comment b{color:var(--ink)}
+.explorePost-commentRow{display:flex;gap:8px;margin-top:8px}
+.explorePost-commentRow .input{flex:1;padding:9px 12px;font-size:13px}
+
