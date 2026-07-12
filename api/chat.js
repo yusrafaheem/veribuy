@@ -32,6 +32,9 @@ export default async function handler(req, res) {
   const systemPrompt =
     "You are the Veribuy AI beauty assistant. You help people find and evaluate makeup, skincare, and haircare products: matching them to skin type, tone, concerns, and budget, explaining ingredients, comparing dupes vs originals, and suggesting how to use products correctly. Keep answers short, warm, and practical, favor concrete product categories and ingredient callouts over vague advice, and note when someone should patch-test or check with a dermatologist for medical skin concerns. If asked about something unrelated to beauty, skincare, or shopping, gently steer back to how you can help with that.";
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25000);
+
   try {
     const upstream = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
@@ -45,15 +48,24 @@ export default async function handler(req, res) {
         max_tokens: 600,
         system: systemPrompt,
         messages: cleanMessages
-      })
+      }),
+      signal: controller.signal
     });
 
-    const data = await upstream.json();
+    clearTimeout(timeout);
+
+    const rawText = await upstream.text();
+    let data;
+    try {
+      data = JSON.parse(rawText);
+    } catch {
+      data = null;
+    }
 
     if (!upstream.ok) {
       return res.status(502).json({
         error: "Anthropic API request failed.",
-        detail: data?.error?.message || JSON.stringify(data)
+        detail: data?.error?.message || rawText || `HTTP ${upstream.status}`
       });
     }
 
@@ -67,6 +79,10 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ reply });
   } catch (err) {
+    clearTimeout(timeout);
+    if (err?.name === "AbortError") {
+      return res.status(504).json({ error: "Anthropic API timed out after 25s.", detail: String(err) });
+    }
     return res.status(500).json({ error: "Server error calling Anthropic API.", detail: String(err) });
   }
 }
