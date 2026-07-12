@@ -1,5 +1,13 @@
 const el = (id) => document.getElementById(id);
 
+const ICONS = {
+  bookmark: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>`,
+  clock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>`,
+  message: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>`,
+  arrowUpRight: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M7 7h10v10"/></svg>`,
+  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`
+};
+
 const state = {
   raw: [],
   filtered: [],
@@ -45,17 +53,7 @@ function setStatus(text, tone = "neutral") {
   if (!pill) return;
 
   pill.textContent = text;
-
-  const styles = {
-    neutral: ["rgba(255,255,255,.14)", "rgba(255,255,255,.05)", "rgba(255,255,255,.70)"],
-    good: ["rgba(54,211,153,.35)", "rgba(54,211,153,.10)", "rgba(240,255,250,.92)"],
-    warn: ["rgba(251,191,36,.35)", "rgba(251,191,36,.10)", "rgba(255,250,235,.92)"],
-    bad: ["rgba(251,113,133,.35)", "rgba(251,113,133,.10)", "rgba(255,240,244,.92)"]
-  }[tone] || ["rgba(255,255,255,.14)", "rgba(255,255,255,.05)", "rgba(255,255,255,.70)"];
-
-  pill.style.borderColor = styles[0];
-  pill.style.background = styles[1];
-  pill.style.color = styles[2];
+  pill.className = "status" + (tone && tone !== "neutral" ? ` ${tone}` : "");
 }
 
 function isMajorRetailer(source) {
@@ -171,9 +169,8 @@ function renderResults() {
 
   out.innerHTML = state.filtered.map((it, idx) => {
     const t = trustSignal(it, strict);
-    const discAmt = state.coupon ? couponDiscountFor(it, state.coupon) : 0;
-    const discounted = (state.coupon && typeof it.price === "number" && discAmt > 0)
-      ? Math.max(0, it.price - discAmt)
+    const discounted = (state.coupon && typeof it.price === "number")
+      ? Math.max(0, it.price - state.coupon.amount)
       : null;
 
     const priceLine = discounted !== null
@@ -187,11 +184,12 @@ function renderResults() {
       : `<span class="badge">No flags</span>`;
 
     const major = isMajorRetailer(it.source)
-      ? `<span class="badge brand">Major retailer</span>`
+      ? `<span class="badge brand">${ICONS.check}Major retailer</span>`
       : `<span class="badge">Marketplace</span>`;
 
     const img = it.thumbnail ? `<img alt="" src="${it.thumbnail}" />` : "";
     const trustCls = t.tone === "good" ? "good" : t.tone === "warn" ? "warn" : "bad";
+    const trustIcon = t.tone === "good" ? ICONS.check : "";
 
     return `
       <article class="prod">
@@ -199,11 +197,11 @@ function renderResults() {
         <div>
           <h5>${escapeHtml(it.title)}</h5>
           <div class="meta">
-            Source: <b>${escapeHtml(it.source || "Unknown")}</b> · Rating: <b>${ratingText}</b> · ${escapeHtml(reviewsText)}
+            Source: <b>${escapeHtml(it.source || "Unknown")}</b> &middot; Rating: <b>${ratingText}</b> &middot; ${escapeHtml(reviewsText)}
           </div>
           <div class="row">
             <div class="badges">
-              <span class="badge ${trustCls}">${t.tag}: ${t.score}/100</span>
+              <span class="badge ${trustCls}">${trustIcon}${t.tag} <b>${t.score}/100</b></span>
               ${reason}
               ${major}
             </div>
@@ -211,13 +209,13 @@ function renderResults() {
           </div>
           <div class="row" style="margin-top:10px;">
             <div class="small">
-              Multi-aspect (demo): Value <b>${aspectScore(t.score, 2)}</b> · Longevity <b>${aspectScore(t.score, 1)}</b> · Comfort <b>${aspectScore(t.score, 3)}</b> · Pigmentation <b>${aspectScore(t.score, 0)}</b>
+              Value <b>${aspectScore(t.score, 2)}</b> &middot; Longevity <b>${aspectScore(t.score, 1)}</b> &middot; Comfort <b>${aspectScore(t.score, 3)}</b> &middot; Pigmentation <b>${aspectScore(t.score, 0)}</b>
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
-              <button class="btn" data-wish="${idx}">Save</button>
-              <button class="btn" data-history="${idx}">History</button>
-              <button class="btn" data-reviews="${idx}">See Reviews</button>
-              <a class="btn" href="${safeLink(it.link, it.title)}" target="_blank" rel="noopener noreferrer">View ↗</a>
+              <button class="iconbtn" data-wish="${idx}" title="Save to wishlist">${ICONS.bookmark}<span>Save</span></button>
+              <button class="iconbtn" data-history="${idx}" title="Price history">${ICONS.clock}<span>History</span></button>
+              <button class="iconbtn" data-reviews="${idx}" title="See reviews">${ICONS.message}<span>Reviews</span></button>
+              <a class="iconbtn" href="${safeLink(it.link, it.title)}" target="_blank" rel="noopener noreferrer" title="View product">${ICONS.arrowUpRight}<span>View</span></a>
             </div>
           </div>
           <div id="reviews-${idx}" class="small" style="margin-top:10px; display:none;"></div>
@@ -254,10 +252,7 @@ function renderCompare() {
   body.innerHTML = top.map(it => {
     const t = trustSignal(it, strict);
     const trustLabel = t.tone === "good" ? "Trusted" : t.tone === "warn" ? "Mixed" : "Flagged";
-    const discAmt = state.coupon ? couponDiscountFor(it, state.coupon) : 0;
-    const coupon = (state.coupon && discAmt > 0)
-      ? (state.coupon.status === "verified" ? "Verified applied" : state.coupon.status === "expired" ? "Reported not working" : "Unverified")
-      : "—";
+    const coupon = state.coupon ? (state.coupon.verified ? "Verified, applied" : "Unverified") : "—";
 
     return `
       <tr>
@@ -298,14 +293,14 @@ function renderWishlist() {
   }
 
   out.innerHTML = state.wishlist.slice(0, 8).map(w => `
-    <div style="display:flex; justify-content:space-between; gap:10px; align-items:center; margin:6px 0;">
+    <div class="listItem">
       <div>
         <b>${escapeHtml(w.title)}</b>
-        <div class="small">${escapeHtml(w.source || "Unknown")} · ${fmtUSD(w.price)}</div>
+        <div class="small">${escapeHtml(w.source || "Unknown")} &middot; ${fmtUSD(w.price)}</div>
       </div>
       <div style="display:flex; gap:8px;">
-        <a class="btn" href="${safeLink(w.link, w.title)}" target="_blank" rel="noopener noreferrer">Open ↗</a>
-        <button class="btn" data-rm="${escapeHtml(w._k)}">Remove</button>
+        <a class="iconbtn" href="${safeLink(w.link, w.title)}" target="_blank" rel="noopener noreferrer" title="Open product">${ICONS.arrowUpRight}<span>Open</span></a>
+        <button class="iconbtn" data-rm="${escapeHtml(w._k)}" title="Remove from wishlist">Remove</button>
       </div>
     </div>
   `).join("");
@@ -315,192 +310,36 @@ function renderWishlist() {
   });
 }
 
-/* Coupons (crowd-verified) */
-function couponDiscountFor(item, coupon) {
-  if (!coupon) return 0;
-  if (coupon.retailer && coupon.retailer !== "any" && (item.source || "").toLowerCase() !== coupon.retailer.toLowerCase()) {
-    return 0;
-  }
-  const price = typeof item.price === "number" ? item.price : 0;
-  if (coupon.discount_type === "percent") return price * (coupon.discount_value / 100);
-  return coupon.discount_value;
-}
-
-function couponStatusBadge(status) {
-  if (status === "verified") return `<span class="badge good">Verified</span>`;
-  if (status === "expired") return `<span class="badge bad">Reported not working</span>`;
-  return `<span class="badge warn">Unverified</span>`;
-}
-
-function couponSubmitFormHtml(prefillCode) {
-  return `
-    <div class="panel mini" style="margin-top:8px;">
-      <h4>Submit a code</h4>
-      <div class="chips" style="margin-bottom:8px;">
-        <input id="newCouponCode" class="input" placeholder="Code" value="${escapeHtml(prefillCode)}" style="max-width:140px;" />
-        <input id="newCouponRetailer" class="input" placeholder="Retailer (blank = any)" style="max-width:200px;" />
-        <select id="newCouponType" class="input" style="max-width:110px;">
-          <option value="percent">% off</option>
-          <option value="fixed">$ off</option>
-        </select>
-        <input id="newCouponValue" class="input" type="number" min="0" step="0.01" placeholder="Amount" style="max-width:100px;" />
-      </div>
-      <input id="newCouponDesc" class="input" placeholder="Notes (optional)" style="margin-bottom:8px;" />
-      <div class="small" id="newCouponOut"></div>
-      <button class="btn primary" id="btnSubmitCoupon" style="margin-top:8px;">Submit code</button>
-    </div>
-  `;
-}
-
-async function applyCoupon(code) {
+/* Coupon demo */
+function applyCoupon(code) {
   const c = (code || "").trim().toUpperCase();
   const out = el("couponOut");
-  if (!out) return;
 
   if (!c) {
     state.coupon = null;
-    out.innerHTML = `<div class="small">Enter a code to look it up.</div>`;
+    out && (out.textContent = "Enter a code to see how verification works.");
     applyFilters();
     return;
   }
 
-  if (!sb) {
-    out.innerHTML = `<div class="small">Coupon lookup isn't available right now (auth not configured).</div>`;
-    return;
-  }
-
-  out.innerHTML = `<div class="small">Looking up "${escapeHtml(c)}"…</div>`;
-
-  const { data, error } = await sb
-    .from("coupon_stats")
-    .select("coupon_id, code, retailer, discount_type, discount_value, description, total_reports, worked_reports, status")
-    .ilike("code", c)
-    .order("total_reports", { ascending: false });
-
-  if (error) {
-    out.innerHTML = `<div class="small">Lookup failed: ${escapeHtml(error.message)}</div>`;
-    return;
-  }
-
-  if (!data || !data.length) {
-    state.coupon = null;
-    out.innerHTML = `
-      <div class="small">No one has submitted "${escapeHtml(c)}" yet. Be the first.</div>
-      ${couponSubmitFormHtml(c)}
-    `;
-    el("btnSubmitCoupon")?.addEventListener("click", submitCoupon);
-    applyFilters();
-    return;
-  }
-
-  const best = data[0];
-  state.coupon = {
-    code: best.code,
-    retailer: best.retailer,
-    discount_type: best.discount_type,
-    discount_value: Number(best.discount_value),
-    status: best.status
+  const rules = {
+    VERIBUY5: { amount: 0.75, verified: true, msg: "Verified coupon applied." },
+    WELCOME: { amount: 0.50, verified: true, msg: "Verified welcome coupon applied." },
+    SAVE10: { amount: 1.00, verified: false, msg: "This code exists, but it has not been verified for every seller yet." }
   };
 
-  const { data: { session } } = await sb.auth.getSession();
-  const user = session?.user || null;
+  const coupon = rules[c];
 
-  const rowsHtml = data.map(row => {
-    const amountText = row.discount_type === "percent"
-      ? `${row.discount_value}% off`
-      : `$${Number(row.discount_value).toFixed(2)} off`;
+  if (!coupon) {
+    state.coupon = { amount: 0.0, verified: false, code: c };
+    out && (out.textContent = `Code "${c}" was not found.`);
+    applyFilters();
+    return;
+  }
 
-    return `
-      <div class="panel mini" style="margin-bottom:8px;">
-        <div class="row">
-          <div>
-            <b>${escapeHtml(row.code)}</b> · ${escapeHtml(row.retailer === "any" ? "Any retailer" : row.retailer)} · ${amountText}
-            ${couponStatusBadge(row.status)}
-          </div>
-        </div>
-        ${row.description ? `<div class="small" style="margin-top:4px;">${escapeHtml(row.description)}</div>` : ""}
-        <div class="small" style="margin-top:4px; color:rgba(255,255,255,.45);">
-          ${row.worked_reports}/${row.total_reports} reports say it worked (last 30 days)
-        </div>
-        ${user ? `
-          <div class="chips" style="margin-top:8px;">
-            <button class="btn" data-report="${row.coupon_id}" data-worked="true">It worked</button>
-            <button class="btn" data-report="${row.coupon_id}" data-worked="false">Didn't work</button>
-          </div>
-        ` : `<div class="small" style="margin-top:8px;">Log in above to report whether this worked.</div>`}
-      </div>
-    `;
-  }).join("");
-
-  out.innerHTML = `${rowsHtml}${couponSubmitFormHtml(c)}`;
-
-  out.querySelectorAll("[data-report]").forEach(btn => {
-    btn.addEventListener("click", () => reportCoupon(btn.getAttribute("data-report"), btn.getAttribute("data-worked") === "true", c));
-  });
-
-  el("btnSubmitCoupon")?.addEventListener("click", submitCoupon);
+  state.coupon = { ...coupon, code: c };
+  out && (out.textContent = `${coupon.msg} You saved $${coupon.amount.toFixed(2)}.`);
   applyFilters();
-}
-
-async function submitCoupon() {
-  const out = el("newCouponOut");
-  if (!sb) return;
-
-  const { data: { session } } = await sb.auth.getSession();
-  const user = session?.user;
-  if (!user) {
-    out && (out.textContent = "Log in above to submit a code.");
-    return;
-  }
-
-  const code = (el("newCouponCode")?.value || "").trim().toUpperCase();
-  const retailer = (el("newCouponRetailer")?.value || "").trim().toLowerCase() || "any";
-  const discount_type = el("newCouponType")?.value || "percent";
-  const discount_value = Number(el("newCouponValue")?.value || 0);
-  const description = (el("newCouponDesc")?.value || "").trim();
-
-  if (!code) {
-    out && (out.textContent = "Enter a code.");
-    return;
-  }
-  if (!discount_value || discount_value <= 0) {
-    out && (out.textContent = "Enter a discount amount greater than 0.");
-    return;
-  }
-
-  out && (out.textContent = "Submitting…");
-
-  const { error } = await sb.from("coupons").insert({
-    code,
-    retailer,
-    discount_type,
-    discount_value,
-    description: description || null,
-    submitted_by: user.id
-  });
-
-  if (error) {
-    out && (out.textContent = error.code === "23505"
-      ? "That code + retailer combo already exists."
-      : `Couldn't submit: ${error.message}`);
-    return;
-  }
-
-  await applyCoupon(code);
-}
-
-async function reportCoupon(couponId, worked, lookupCode) {
-  if (!sb) return;
-  const { data: { session } } = await sb.auth.getSession();
-  const user = session?.user;
-  if (!user) return;
-
-  const { error } = await sb.from("coupon_reports").upsert(
-    { coupon_id: couponId, user_id: user.id, worked },
-    { onConflict: "coupon_id,user_id" }
-  );
-
-  if (!error) await applyCoupon(lookupCode);
 }
 
 /* Alerts */
@@ -549,12 +388,12 @@ function renderAlerts() {
     });
 
     return `
-      <div style="display:flex; justify-content:space-between; gap:10px; align-items:center; margin:6px 0;">
+      <div class="listItem">
         <div>
           <b>${escapeHtml(a.name)}</b>
-          <div class="small">max ${fmtUSD(a.maxPrice)} · min rating ${a.minRating || "Any"} · ${a.strict ? "Strict trust" : "Standard"} · ${when}</div>
+          <div class="small">max ${fmtUSD(a.maxPrice)} &middot; min rating ${a.minRating || "Any"} &middot; ${a.strict ? "Strict trust" : "Standard"} &middot; ${when}</div>
         </div>
-        <button class="btn" data-alert-rm="${escapeHtml(a.id)}">Remove</button>
+        <button class="iconbtn" data-alert-rm="${escapeHtml(a.id)}">Remove</button>
       </div>
     `;
   }).join("");
@@ -591,13 +430,7 @@ function showHistory(filteredIndex) {
   if (details) details.open = true;
 }
 
-function productKeyFor(item) {
-  const src = (item.source || "").trim().toLowerCase();
-  const title = (item.title || "").trim().toLowerCase();
-  return `${src}::${title}`;
-}
-
-async function showReviews(filteredIndex) {
+function showReviews(filteredIndex) {
   const item = state.filtered[filteredIndex];
   const box = document.getElementById(`reviews-${filteredIndex}`);
   if (!item || !box) return;
@@ -608,162 +441,21 @@ async function showReviews(filteredIndex) {
     return;
   }
 
-  box.style.display = "block";
-  box.innerHTML = `<div class="small">Loading reviews…</div>`;
-
-  await renderReviewsBox(filteredIndex, item, box);
-}
-
-async function renderReviewsBox(filteredIndex, item, box) {
-  const productKey = productKeyFor(item);
-
-  let reviews = [];
-  let loadError = null;
-
-  if (sb) {
-    const { data, error } = await sb
-      .from("reviews")
-      .select("id, rating, body, photo_url, purchased_attested, created_at, user_id")
-      .eq("product_key", productKey)
-      .order("created_at", { ascending: false })
-      .limit(20);
-
-    if (error) loadError = error.message;
-    else reviews = data || [];
-  }
-
-  const count = reviews.length;
-  const avg = count ? (reviews.reduce((s, r) => s + r.rating, 0) / count) : null;
-
-  const { data: { session } } = sb ? await sb.auth.getSession() : { data: { session: null } };
-  const user = session?.user || null;
-
-  const listHtml = !sb
-    ? `<div class="small">Reviews aren't available right now (auth not configured).</div>`
-    : loadError
-    ? `<div class="small">Couldn't load reviews: ${escapeHtml(loadError)}</div>`
-    : !count
-    ? `<div class="small">No photo-verified reviews yet. Be the first.</div>`
-    : reviews.map(r => `
-        <div class="panel mini" style="margin-bottom:8px;">
-          <div class="row" style="align-items:flex-start;">
-            <div>
-              <div><b>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</b> ${r.purchased_attested && r.photo_url ? `<span class="badge good">Photo-verified</span>` : ""}</div>
-              ${r.body ? `<div class="small" style="margin-top:4px;">${escapeHtml(r.body)}</div>` : ""}
-              <div class="small" style="margin-top:4px; color:rgba(255,255,255,.45);">${new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
-            </div>
-            ${r.photo_url ? `<img src="${r.photo_url}" alt="" style="width:56px;height:56px;border-radius:12px;object-fit:cover;border:1px solid rgba(255,255,255,.14);" />` : ""}
-          </div>
-        </div>
-      `).join("");
-
-  const summaryHtml = count
-    ? `<div class="small" style="margin-bottom:10px;">${avg.toFixed(1)}★ average · ${count} photo-verified review${count === 1 ? "" : "s"}</div>`
-    : "";
-
-  const formHtml = !sb
-    ? ""
-    : !user
-    ? `<div class="small" style="margin-top:10px;">Log in above to leave a photo-verified review.</div>`
-    : `
-      <div class="panel mini" style="margin-top:10px;">
-        <h4>Leave a photo-verified review</h4>
-        <div class="small" style="margin-bottom:8px;">A real photo and purchase confirmation are required — this is what "Photo-verified" means on Veribuy.</div>
-        <div class="chips" style="margin-bottom:8px;">
-          <select id="reviewRating-${filteredIndex}" class="input" style="max-width:140px;">
-            <option value="5">5 ★★★★★</option>
-            <option value="4">4 ★★★★</option>
-            <option value="3">3 ★★★</option>
-            <option value="2">2 ★★</option>
-            <option value="1">1 ★</option>
-          </select>
-        </div>
-        <textarea id="reviewBody-${filteredIndex}" class="input" placeholder="What did you think? (optional)" style="min-height:60px; margin-bottom:8px;"></textarea>
-        <div class="chips" style="margin-bottom:8px; align-items:center;">
-          <input id="reviewPhoto-${filteredIndex}" type="file" accept="image/*" />
-        </div>
-        <label class="chip chk" style="margin-bottom:8px;">
-          <input id="reviewPurchased-${filteredIndex}" type="checkbox" />
-          I purchased this item
-        </label>
-        <div class="small" id="reviewError-${filteredIndex}" style="color:rgba(251,113,133,.9); margin-bottom:8px;"></div>
-        <button class="btn primary" data-submit-review="${filteredIndex}">Submit review</button>
-      </div>
-    `;
-
   box.innerHTML = `
     <div class="panel mini">
-      <h4 style="margin-bottom:8px;">Photo-verified reviews for ${escapeHtml(item.title)}</h4>
-      ${summaryHtml}
-      ${listHtml}
-      ${formHtml}
+      <h4 style="margin-bottom:8px;">Reviews for ${escapeHtml(item.title)}</h4>
+      <div class="emptyState">
+        <div><b>No reviews yet</b></div>
+        <div style="margin-top:4px;">
+          Once shoppers with a verified purchase start leaving photo reviews, they will show up here first.
+        </div>
+      </div>
     </div>
   `;
 
-  box.querySelector(`[data-submit-review="${filteredIndex}"]`)?.addEventListener("click", () => submitReview(filteredIndex, item, box));
+  box.style.display = "block";
 }
 
-async function submitReview(filteredIndex, item, box) {
-  const errorEl = document.getElementById(`reviewError-${filteredIndex}`);
-  errorEl && (errorEl.textContent = "");
-
-  if (!sb) return;
-
-  const { data: { session } } = await sb.auth.getSession();
-  const user = session?.user;
-  if (!user) {
-    errorEl && (errorEl.textContent = "Log in to submit a review.");
-    return;
-  }
-
-  const rating = Number(document.getElementById(`reviewRating-${filteredIndex}`)?.value || 5);
-  const body = (document.getElementById(`reviewBody-${filteredIndex}`)?.value || "").trim();
-  const purchased = !!document.getElementById(`reviewPurchased-${filteredIndex}`)?.checked;
-  const fileInput = document.getElementById(`reviewPhoto-${filteredIndex}`);
-  const file = fileInput?.files?.[0];
-
-  if (!purchased) {
-    errorEl && (errorEl.textContent = 'Check "I purchased this item" to submit a photo-verified review.');
-    return;
-  }
-  if (!file) {
-    errorEl && (errorEl.textContent = "A photo of the product is required for a photo-verified review.");
-    return;
-  }
-
-  errorEl && (errorEl.textContent = "Uploading…");
-
-  const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
-  const id = (globalThis.crypto?.randomUUID?.() || String(Date.now()));
-  const path = `${user.id}/${id}.${ext}`;
-
-  const { error: uploadError } = await sb.storage.from("review-photos").upload(path, file, { upsert: false });
-  if (uploadError) {
-    errorEl && (errorEl.textContent = `Photo upload failed: ${uploadError.message}`);
-    return;
-  }
-
-  const { data: pub } = sb.storage.from("review-photos").getPublicUrl(path);
-  const photoUrl = pub?.publicUrl;
-
-  const { error: insertError } = await sb.from("reviews").insert({
-    user_id: user.id,
-    product_key: productKeyFor(item),
-    product_title: item.title,
-    product_source: item.source || null,
-    rating,
-    body: body || null,
-    photo_url: photoUrl,
-    purchased_attested: true
-  });
-
-  if (insertError) {
-    errorEl && (errorEl.textContent = `Couldn't save review: ${insertError.message}`);
-    return;
-  }
-
-  await renderReviewsBox(filteredIndex, item, box);
-}
 function generateHistory(currentPrice) {
   const notes = ["Stable", "Small dip", "Small rise", "Promo week", "Low stock", "Weekend drop", "Restock", "Trending"];
   const arr = [];
@@ -784,129 +476,6 @@ function generateHistory(currentPrice) {
   }
 
   return arr;
-}
-
-/* Auth (Supabase) */
-let sb = null;
-
-async function initAuth() {
-  const authOut = el("authOut");
-  try {
-    const r = await fetch("/api/config");
-    const cfg = await r.json();
-
-    if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
-      authOut && (authOut.textContent = "Auth not configured yet (missing Supabase env vars in Vercel).");
-      return;
-    }
-
-    sb = supabase.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
-
-    sb.auth.onAuthStateChange((_event, session) => {
-      renderAuthState(session);
-    });
-
-    const { data: { session } } = await sb.auth.getSession();
-    renderAuthState(session);
-  } catch (e) {
-    authOut && (authOut.textContent = "Auth failed to load.");
-    console.error("initAuth error:", e);
-  }
-}
-
-function renderAuthState(session) {
-  const authOut = el("authOut");
-  const btnSignUp = el("btnSignUp");
-  const btnSignIn = el("btnSignIn");
-  const btnSignOut = el("btnSignOut");
-  const toggle = el("subscribedToggle");
-
-  const user = session?.user || null;
-
-  if (authOut) {
-    authOut.textContent = user ? `Logged in as ${user.email}` : "Not logged in.";
-  }
-
-  if (btnSignUp) btnSignUp.style.display = user ? "none" : "";
-  if (btnSignIn) btnSignIn.style.display = user ? "none" : "";
-  if (btnSignOut) btnSignOut.style.display = user ? "" : "none";
-
-  if (toggle && user) {
-    const subscribed = user.user_metadata?.subscribed;
-    toggle.checked = subscribed !== false;
-  }
-}
-
-async function signUp() {
-  if (!sb) return alert("Auth isn't ready yet. Try again in a moment.");
-  const email = (el("authEmail")?.value || "").trim();
-  const password = el("authPassword")?.value || "";
-  const authOut = el("authOut");
-
-  if (!email || !password) {
-    authOut && (authOut.textContent = "Enter an email and password to sign up.");
-    return;
-  }
-
-  authOut && (authOut.textContent = "Signing up…");
-  const { data, error } = await sb.auth.signUp({ email, password });
-
-  if (error) {
-    authOut && (authOut.textContent = `Sign up failed: ${error.message}`);
-    return;
-  }
-
-  authOut && (authOut.textContent = data.session
-    ? `Signed up and logged in as ${data.user.email}.`
-    : "Check your email to confirm your account.");
-
-  renderAuthState(data.session);
-}
-
-async function signIn() {
-  if (!sb) return alert("Auth isn't ready yet. Try again in a moment.");
-  const email = (el("authEmail")?.value || "").trim();
-  const password = el("authPassword")?.value || "";
-  const authOut = el("authOut");
-
-  if (!email || !password) {
-    authOut && (authOut.textContent = "Enter an email and password to log in.");
-    return;
-  }
-
-  authOut && (authOut.textContent = "Logging in…");
-  const { data, error } = await sb.auth.signInWithPassword({ email, password });
-
-  if (error) {
-    authOut && (authOut.textContent = `Log in failed: ${error.message}`);
-    return;
-  }
-
-  renderAuthState(data.session);
-}
-
-async function signOut() {
-  if (!sb) return;
-  await sb.auth.signOut();
-  renderAuthState(null);
-}
-
-async function saveSubscription() {
-  if (!sb) return alert("Auth isn't ready yet. Try again in a moment.");
-  const { data: { session } } = await sb.auth.getSession();
-  const authOut = el("authOut");
-
-  if (!session?.user) {
-    authOut && (authOut.textContent = "Log in first to save your preference.");
-    return;
-  }
-
-  const subscribed = !!el("subscribedToggle")?.checked;
-  const { error } = await sb.auth.updateUser({ data: { subscribed } });
-
-  authOut && (authOut.textContent = error
-    ? `Couldn't save preference: ${error.message}`
-    : `Preference saved: ${subscribed ? "receiving updates" : "updates off"}.`);
 }
 
 /* Live search */
@@ -961,11 +530,6 @@ function init() {
   });
 
   el("btnSaveAlert")?.addEventListener("click", saveAlert);
-  el("btnSignUp")?.addEventListener("click", signUp);
-  el("btnSignIn")?.addEventListener("click", signIn);
-  el("btnSignOut")?.addEventListener("click", signOut);
-  el("btnSaveSubscription")?.addEventListener("click", saveSubscription);
-  initAuth();
 
   renderWishlist();
   renderAlerts();
@@ -973,3 +537,4 @@ function init() {
 }
 
 init();
+
