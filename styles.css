@@ -410,3 +410,20 @@ mark{
 .explorePost-commentRow{display:flex;gap:8px;margin-top:8px}
 .explorePost-commentRow .input{flex:1;padding:9px 12px;font-size:13px}
 
+.chatCard{display:flex;flex-direction:column;height:min(600px,70vh)}
+.chatThread{
+  flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px;
+  padding:4px 2px 12px;
+}
+.chatMsg{display:flex}
+.chatMsg-user{justify-content:flex-end}
+.chatMsg-assistant{justify-content:flex-start}
+.chatBubble{
+  max-width:78%;padding:10px 14px;border-radius:var(--radius-lg);
+  font-size:13.5px;line-height:1.45;white-space:pre-wrap;
+}
+.chatMsg-assistant .chatBubble{background:var(--surface-soft,var(--brand-tint));color:var(--ink);border:1px solid var(--line)}
+.chatMsg-user .chatBubble{background:var(--brand);color:#fff}
+.chatBubble.pending{opacity:.6;font-style:italic}
+.chatInputRow{display:flex;gap:8px;align-items:flex-end;border-top:1px solid var(--line-soft);padding-top:12px}
+.chatInputRow .input{flex:1;resize:none;padding:10px 12px;font-size:13.5px;max-height:120px}
