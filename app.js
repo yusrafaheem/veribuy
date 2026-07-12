@@ -1245,7 +1245,8 @@ async function sendChatMessage() {
 
     if (!resp.ok) {
       if (pendingBubble) pendingBubble.parentElement.remove();
-      errorEl && (errorEl.textContent = data?.error || "Something went wrong. Please try again.");
+      const baseMsg = data?.error || "Something went wrong. Please try again.";
+      errorEl && (errorEl.textContent = data?.detail ? `${baseMsg} (${data.detail})` : baseMsg);
       chatHistory.pop();
       return;
     }
