@@ -344,3 +344,38 @@ mark{
   outline-offset:2px;border-radius:12px;
 }
 
+.navlinks.tabs{gap:2px}
+.tabBtn{
+  font-family:var(--font-body);
+  font-size:13.5px;font-weight:650;color:var(--ink-soft);
+  padding:9px 14px;border-radius:999px;
+  border:none;background:transparent;cursor:pointer;
+  transition:background .12s ease, color .12s ease;
+}
+.tabBtn:hover{color:var(--ink);background:var(--bg-alt)}
+.tabBtn.active{color:#fff;background:var(--brand)}
+
+.tabpanel{display:none}
+.tabpanel.active{display:block}
+
+.comingSoon{
+  text-align:center;
+  padding:52px 24px;
+  display:flex;flex-direction:column;align-items:center;gap:10px;
+}
+.comingSoon-icon{
+  width:52px;height:52px;border-radius:50%;
+  background:var(--brand-tint);
+  color:var(--brand-dark);
+  display:flex;align-items:center;justify-content:center;
+  margin-bottom:6px;
+}
+.comingSoon-icon svg{width:24px;height:24px}
+.comingSoon h3{margin:0;font-size:17px;font-weight:750}
+.comingSoon p.muted{max-width:52ch}
+
+@media (max-width:720px){
+  .navlinks.tabs{width:100%;justify-content:space-between;overflow-x:auto}
+  .tabBtn{padding:8px 10px;font-size:12.5px;white-space:nowrap}
+}
+
