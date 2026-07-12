@@ -5,7 +5,8 @@ const ICONS = {
   clock: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>`,
   message: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>`,
   arrowUpRight: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M7 7h10v10"/></svg>`,
-  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`
+  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>`,
+  heart: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.8 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>`
 };
 
 const state = {
@@ -836,6 +837,9 @@ function renderAuthState(session) {
     const subscribed = user.user_metadata?.subscribed;
     toggle.checked = subscribed !== false;
   }
+
+  refreshExploreAuthNote();
+  loadExploreFeed();
 }
 
 async function signUp() {
@@ -937,6 +941,263 @@ async function runSearch(query) {
   }
 }
 
+/* Explore feed (backed by Supabase) */
+let exploreLikedSet = new Set();
+let exploreSavedSet = new Set();
+
+async function refreshExploreAuthNote() {
+  const note = el("exploreAuthNote");
+  if (!note) return;
+
+  if (!sb) {
+    note.textContent = "Explore is not available right now. Auth is not configured.";
+    return;
+  }
+
+  const { data: { session } } = await sb.auth.getSession();
+  note.textContent = session?.user
+    ? `Posting as ${session.user.email}`
+    : "Log in on the Profile tab to post, like, comment, or save.";
+}
+
+async function loadExploreFeed() {
+  const out = el("exploreFeed");
+  if (!out) return;
+
+  if (!sb) {
+    out.innerHTML = `<div class="emptyState">Explore is not available right now. Auth is not configured.</div>`;
+    return;
+  }
+
+  const { data: posts, error } = await sb
+    .from("post_stats")
+    .select("post_id, user_id, media_url, media_type, caption, created_at, like_count, comment_count")
+    .order("created_at", { ascending: false })
+    .limit(60);
+
+  if (error) {
+    out.innerHTML = `<div class="emptyState">Could not load posts: ${escapeHtml(error.message)}</div>`;
+    return;
+  }
+
+  if (!posts || !posts.length) {
+    out.innerHTML = `<div class="emptyState"><b>No posts yet</b><div style="margin-top:4px;">Be the first to share what you're trying.</div></div>`;
+    return;
+  }
+
+  const { data: { session } } = await sb.auth.getSession();
+  const user = session?.user || null;
+
+  exploreLikedSet = new Set();
+  exploreSavedSet = new Set();
+
+  if (user) {
+    const postIds = posts.map(p => p.post_id);
+    const [{ data: likes }, { data: saves }] = await Promise.all([
+      sb.from("post_likes").select("post_id").eq("user_id", user.id).in("post_id", postIds),
+      sb.from("post_saves").select("post_id").eq("user_id", user.id).in("post_id", postIds)
+    ]);
+    (likes || []).forEach(l => exploreLikedSet.add(l.post_id));
+    (saves || []).forEach(s => exploreSavedSet.add(s.post_id));
+  }
+
+  out.innerHTML = posts.map(p => renderExplorePost(p)).join("");
+
+  out.querySelectorAll("[data-like]").forEach(btn => {
+    btn.addEventListener("click", () => toggleExploreLike(btn.getAttribute("data-like")));
+  });
+  out.querySelectorAll("[data-save]").forEach(btn => {
+    btn.addEventListener("click", () => toggleExploreSave(btn.getAttribute("data-save")));
+  });
+  out.querySelectorAll("[data-toggle-comments]").forEach(btn => {
+    btn.addEventListener("click", () => toggleExploreComments(btn.getAttribute("data-toggle-comments")));
+  });
+}
+
+function renderExplorePost(p) {
+  const liked = exploreLikedSet.has(p.post_id);
+  const saved = exploreSavedSet.has(p.post_id);
+  const when = new Date(p.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  const media = p.media_type === "video"
+    ? `<video src="${p.media_url}" controls playsinline></video>`
+    : `<img src="${p.media_url}" alt="" />`;
+
+  return `
+    <div class="explorePost">
+      <div class="explorePost-media">${media}</div>
+      <div class="explorePost-body">
+        ${p.caption ? `<p class="explorePost-caption">${escapeHtml(p.caption)}</p>` : ""}
+        <div class="explorePost-meta">${when}</div>
+        <div class="explorePost-actions">
+          <button class="iconbtn ${liked ? "active" : ""}" data-like="${p.post_id}">${ICONS.heart}<span>${p.like_count}</span></button>
+          <button class="iconbtn" data-toggle-comments="${p.post_id}">${ICONS.message}<span>${p.comment_count}</span></button>
+          <button class="iconbtn ${saved ? "active" : ""}" data-save="${p.post_id}">${ICONS.bookmark}<span>${saved ? "Saved" : "Save"}</span></button>
+        </div>
+        <div class="explorePost-comments" id="comments-${p.post_id}" style="display:none;"></div>
+      </div>
+    </div>
+  `;
+}
+
+async function toggleExploreLike(postId) {
+  if (!sb) return;
+  const { data: { session } } = await sb.auth.getSession();
+  const user = session?.user;
+  if (!user) {
+    alert("Log in on the Profile tab to like posts.");
+    return;
+  }
+
+  if (exploreLikedSet.has(postId)) {
+    await sb.from("post_likes").delete().eq("post_id", postId).eq("user_id", user.id);
+  } else {
+    await sb.from("post_likes").insert({ post_id: postId, user_id: user.id });
+  }
+
+  await loadExploreFeed();
+}
+
+async function toggleExploreSave(postId) {
+  if (!sb) return;
+  const { data: { session } } = await sb.auth.getSession();
+  const user = session?.user;
+  if (!user) {
+    alert("Log in on the Profile tab to save posts.");
+    return;
+  }
+
+  if (exploreSavedSet.has(postId)) {
+    await sb.from("post_saves").delete().eq("post_id", postId).eq("user_id", user.id);
+  } else {
+    await sb.from("post_saves").insert({ post_id: postId, user_id: user.id });
+  }
+
+  await loadExploreFeed();
+}
+
+async function toggleExploreComments(postId) {
+  const box = document.getElementById(`comments-${postId}`);
+  if (!box) return;
+
+  if (box.style.display === "block") {
+    box.style.display = "none";
+    box.innerHTML = "";
+    return;
+  }
+
+  box.style.display = "block";
+  box.innerHTML = `<div class="small">Loading comments...</div>`;
+  await renderExploreComments(postId, box);
+}
+
+async function renderExploreComments(postId, box) {
+  if (!sb) return;
+
+  const { data: comments, error } = await sb
+    .from("post_comments")
+    .select("id, body, created_at, user_id")
+    .eq("post_id", postId)
+    .order("created_at", { ascending: true })
+    .limit(50);
+
+  const { data: { session } } = await sb.auth.getSession();
+  const user = session?.user || null;
+
+  const listHtml = error
+    ? `<div class="small">Could not load comments: ${escapeHtml(error.message)}</div>`
+    : (!comments || !comments.length)
+    ? `<div class="small">No comments yet.</div>`
+    : comments.map(c => `<p class="explorePost-comment">${escapeHtml(c.body)}</p>`).join("");
+
+  const formHtml = !user
+    ? `<div class="small" style="margin-top:8px;">Log in to comment.</div>`
+    : `
+      <div class="explorePost-commentRow">
+        <input class="input" id="commentInput-${postId}" placeholder="Add a comment" />
+        <button class="btn" data-submit-comment="${postId}">Post</button>
+      </div>
+    `;
+
+  box.innerHTML = `${listHtml}${formHtml}`;
+
+  box.querySelector(`[data-submit-comment="${postId}"]`)?.addEventListener("click", () => submitExploreComment(postId, box));
+}
+
+async function submitExploreComment(postId, box) {
+  if (!sb) return;
+  const input = document.getElementById(`commentInput-${postId}`);
+  const body = (input?.value || "").trim();
+  if (!body) return;
+
+  const { data: { session } } = await sb.auth.getSession();
+  const user = session?.user;
+  if (!user) return;
+
+  const { error } = await sb.from("post_comments").insert({ post_id: postId, user_id: user.id, body });
+  if (!error) {
+    await renderExploreComments(postId, box);
+    await loadExploreFeed();
+  }
+}
+
+async function postToExplore() {
+  const errorEl = el("explorePostError");
+  errorEl && (errorEl.textContent = "");
+
+  if (!sb) return;
+
+  const { data: { session } } = await sb.auth.getSession();
+  const user = session?.user;
+  if (!user) {
+    errorEl && (errorEl.textContent = "Log in on the Profile tab to post.");
+    return;
+  }
+
+  const fileInput = el("explorePhoto");
+  const file = fileInput?.files?.[0];
+  const caption = (el("exploreCaption")?.value || "").trim();
+
+  if (!file) {
+    errorEl && (errorEl.textContent = "Choose a photo or video to post.");
+    return;
+  }
+
+  errorEl && (errorEl.textContent = "Uploading...");
+
+  const mediaType = file.type.startsWith("video") ? "video" : "image";
+  const ext = (file.name.split(".").pop() || (mediaType === "video" ? "mp4" : "jpg")).toLowerCase();
+  const id = (globalThis.crypto?.randomUUID?.() || String(Date.now()));
+  const path = `${user.id}/${id}.${ext}`;
+
+  const { error: uploadError } = await sb.storage.from("explore-media").upload(path, file, { upsert: false });
+  if (uploadError) {
+    errorEl && (errorEl.textContent = `Upload failed: ${uploadError.message}`);
+    return;
+  }
+
+  const { data: pub } = sb.storage.from("explore-media").getPublicUrl(path);
+  const mediaUrl = pub?.publicUrl;
+
+  const { error: insertError } = await sb.from("posts").insert({
+    user_id: user.id,
+    media_url: mediaUrl,
+    media_type: mediaType,
+    caption: caption || null
+  });
+
+  if (insertError) {
+    errorEl && (errorEl.textContent = `Could not save post: ${insertError.message}`);
+    return;
+  }
+
+  errorEl && (errorEl.textContent = "");
+  if (fileInput) fileInput.value = "";
+  const captionEl = el("exploreCaption");
+  if (captionEl) captionEl.value = "";
+
+  await loadExploreFeed();
+}
+
 /* Tabs */
 function initTabs() {
   const buttons = document.querySelectorAll(".tabBtn");
@@ -986,6 +1247,9 @@ function init() {
   el("btnSignOut")?.addEventListener("click", signOut);
   el("btnSaveSubscription")?.addEventListener("click", saveSubscription);
   initAuth();
+
+  el("btnExplorePost")?.addEventListener("click", postToExplore);
+  loadExploreFeed();
 
   renderWishlist();
   renderAlerts();
