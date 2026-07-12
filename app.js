@@ -1198,6 +1198,74 @@ async function postToExplore() {
   await loadExploreFeed();
 }
 
+/* AI Chat (backed by /api/chat) */
+let chatHistory = [];
+let chatBusy = false;
+
+function renderChatMessage(role, text) {
+  const thread = el("chatThread");
+  if (!thread) return null;
+  const row = document.createElement("div");
+  row.className = "chatMsg chatMsg-" + (role === "user" ? "user" : "assistant");
+  const bubble = document.createElement("div");
+  bubble.className = "chatBubble";
+  bubble.textContent = text;
+  row.appendChild(bubble);
+  thread.appendChild(row);
+  thread.scrollTop = thread.scrollHeight;
+  return bubble;
+}
+
+async function sendChatMessage() {
+  const input = el("chatInput");
+  const errorEl = el("chatError");
+  const sendBtn = el("btnChatSend");
+  if (!input || chatBusy) return;
+
+  const text = input.value.trim();
+  if (!text) return;
+
+  errorEl && (errorEl.textContent = "");
+  input.value = "";
+  renderChatMessage("user", text);
+  chatHistory.push({ role: "user", content: text });
+
+  chatBusy = true;
+  if (sendBtn) sendBtn.disabled = true;
+  const pendingBubble = renderChatMessage("assistant", "Thinking...");
+  if (pendingBubble) pendingBubble.classList.add("pending");
+
+  try {
+    const resp = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ messages: chatHistory })
+    });
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      if (pendingBubble) pendingBubble.parentElement.remove();
+      errorEl && (errorEl.textContent = data?.error || "Something went wrong. Please try again.");
+      chatHistory.pop();
+      return;
+    }
+
+    if (pendingBubble) {
+      pendingBubble.classList.remove("pending");
+      pendingBubble.textContent = data.reply;
+    }
+    chatHistory.push({ role: "assistant", content: data.reply });
+  } catch (err) {
+    if (pendingBubble) pendingBubble.parentElement.remove();
+    errorEl && (errorEl.textContent = "Network error. Please try again.");
+    chatHistory.pop();
+  } finally {
+    chatBusy = false;
+    if (sendBtn) sendBtn.disabled = false;
+    input.focus();
+  }
+}
+
 /* Tabs */
 function initTabs() {
   const buttons = document.querySelectorAll(".tabBtn");
@@ -1251,10 +1319,17 @@ function init() {
   el("btnExplorePost")?.addEventListener("click", postToExplore);
   loadExploreFeed();
 
+  el("btnChatSend")?.addEventListener("click", sendChatMessage);
+  el("chatInput")?.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendChatMessage();
+    }
+  });
+
   renderWishlist();
   renderAlerts();
   runSearch("matte lipstick under $15");
 }
 
 init();
-
