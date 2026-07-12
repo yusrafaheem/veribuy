@@ -937,10 +937,29 @@ async function runSearch(query) {
   }
 }
 
+/* Tabs */
+function initTabs() {
+  const buttons = document.querySelectorAll(".tabBtn");
+  const panels = document.querySelectorAll(".tabpanel");
+
+  buttons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const target = btn.getAttribute("data-tab");
+
+      buttons.forEach(b => b.classList.toggle("active", b === btn));
+      panels.forEach(p => p.classList.toggle("active", p.getAttribute("data-tabpanel") === target));
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  });
+}
+
 /* Init */
 function init() {
   const y = document.getElementById("y");
   if (y) y.textContent = String(new Date().getFullYear());
+
+  initTabs();
 
   el("btnSearch")?.addEventListener("click", () => runSearch(el("q").value));
   el("q")?.addEventListener("keydown", (e) => {
@@ -974,3 +993,4 @@ function init() {
 }
 
 init();
+
