@@ -18,7 +18,7 @@ const state = {
 };
 
 function fmtUSD(n) {
-  if (typeof n !== "number") return "—";
+  if (typeof n !== "number") return "&mdash;";
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD"
@@ -179,7 +179,7 @@ function renderResults() {
       ? `<div class="price">${fmtUSD(discounted)} <span class="small">after coupon</span></div>`
       : `<div class="price">${fmtUSD(it.price)} <span class="small">${it.priceText ? "" : "price n/a"}</span></div>`;
 
-    const ratingText = (typeof it.rating === "number") ? `${it.rating.toFixed(1)}★` : "—";
+    const ratingText = (typeof it.rating === "number") ? `${it.rating.toFixed(1)}&#9733;` : "&mdash;";
     const reviewsText = (typeof it.reviews === "number") ? `${it.reviews} reviews` : "reviews n/a";
     const reason = t.reasons?.[0]
       ? `<span class="badge warn">${escapeHtml(t.reasons[0])}</span>`
@@ -257,7 +257,7 @@ function renderCompare() {
     const discAmt = state.coupon ? couponDiscountFor(it, state.coupon) : 0;
     const coupon = (state.coupon && discAmt > 0)
       ? (state.coupon.status === "verified" ? "Verified, applied" : state.coupon.status === "expired" ? "Reported not working" : "Unverified")
-      : "—";
+      : "&mdash;";
 
     return `
       <tr>
@@ -671,7 +671,7 @@ async function renderReviewsBox(filteredIndex, item, box) {
         <div class="panel mini" style="margin-bottom:8px;">
           <div class="row" style="align-items:flex-start;">
             <div>
-              <div><b>${"★".repeat(r.rating)}${"☆".repeat(5 - r.rating)}</b> ${r.purchased_attested && r.photo_url ? `<span class="badge good">${ICONS.check}Photo-verified</span>` : ""}</div>
+              <div><b>${"&#9733;".repeat(r.rating)}${"&#9734;".repeat(5 - r.rating)}</b> ${r.purchased_attested && r.photo_url ? `<span class="badge good">${ICONS.check}Photo-verified</span>` : ""}</div>
               ${r.body ? `<div class="small" style="margin-top:4px;">${escapeHtml(r.body)}</div>` : ""}
               <div class="small" style="margin-top:4px;">${new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
             </div>
@@ -681,7 +681,7 @@ async function renderReviewsBox(filteredIndex, item, box) {
       `).join("");
 
   const summaryHtml = count
-    ? `<div class="small" style="margin-bottom:10px;">${avg.toFixed(1)}★ average &middot; ${count} photo-verified review${count === 1 ? "" : "s"}</div>`
+    ? `<div class="small" style="margin-bottom:10px;">${avg.toFixed(1)}&#9733; average &middot; ${count} photo-verified review${count === 1 ? "" : "s"}</div>`
     : "";
 
   const formHtml = !sb
@@ -840,6 +840,7 @@ function renderAuthState(session) {
 
   refreshExploreAuthNote();
   loadExploreFeed();
+  loadExploreEmbeds();
   loadTrends();
 }
 
@@ -1199,6 +1200,42 @@ async function postToExplore() {
   await loadExploreFeed();
 }
 
+
+/* Explore embeds: real, credited, unsponsored X/TikTok posts (backed by Supabase) */
+async function loadExploreEmbeds() {
+  const out = el("exploreEmbeds");
+  if (!out) return;
+  if (!sb) {
+    out.innerHTML = "";
+    return;
+  }
+
+  const { data, error } = await sb
+    .from("explore_embeds")
+    .select("id, platform, creator, topic, source_url, embed_url, embed_html, caption")
+    .eq("is_active", true)
+    .order("updated_at", { ascending: false })
+    .limit(30);
+
+  if (error || !data || !data.length) {
+    out.innerHTML = "";
+    return;
+  }
+
+  const mapped = data.map((e) => ({
+    trend_name: e.topic,
+    summary: e.caption,
+    platform: e.platform,
+    source_name: `X - ${e.creator}`,
+    source_url: e.source_url,
+    embed_url: e.embed_url,
+    embed_html: e.embed_html
+  }));
+
+  out.innerHTML = mapped.map(renderTrendCard).join("");
+  ensureTrendEmbedScripts(mapped);
+}
+
 /* Trends (curated daily from beauty publications, embeds refreshed automatically) */
 let trendsEmbedScriptsLoaded = { twitter: false, tiktok: false };
 
@@ -1277,7 +1314,7 @@ async function loadTrends() {
   }
   const rows = data || [];
   updatedEl && (updatedEl.textContent = rows.length
-    ? `Refreshed daily · last update ${rows[0].captured_date}`
+    ? `Refreshed daily &middot; last update ${rows[0].captured_date}`
     : "No trends captured yet.");
   const todayRows = rows.filter((r) => r.captured_date === todayStr);
   todayOut.innerHTML = todayRows.length
@@ -1426,6 +1463,7 @@ function init() {
 
   el("btnExplorePost")?.addEventListener("click", postToExplore);
   loadExploreFeed();
+  loadExploreEmbeds();
 
   el("btnChatSend")?.addEventListener("click", sendChatMessage);
   el("chatInput")?.addEventListener("keydown", (e) => {
