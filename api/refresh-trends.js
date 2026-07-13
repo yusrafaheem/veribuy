@@ -106,6 +106,29 @@ async function findEmbedForItem(item) {
   }
 }
 
+const SPONSORED_PATTERNS = [
+  /#ad\b/i,
+  /#sponsored/i,
+  /#paidpartnership/i,
+  /#brandpartner/i,
+  /#gifted/i,
+  /\bsponsored\b/i,
+  /\bpaid partnership\b/i,
+  /\bin partnership with\b/i,
+  /\bgifted\b/i,
+  /\baffiliate link\b/i,
+  /\buse code\b/i,
+  /\bpromo code\b/i,
+  /\bbrand partner\b/i,
+  /\bthanks .*(for (sponsoring|gifting))\b/i,
+  /\bad\b/i
+];
+
+function isLikelySponsored(text) {
+  if (!text) return false;
+  return SPONSORED_PATTERNS.some((re) => re.test(text));
+}
+
 export default async function handler(req, res) {
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret) {
@@ -178,6 +201,12 @@ export default async function handler(req, res) {
         embedHtml = await fetchOembed(platform, found.url);
       }
     }
+
+    const sponsoredSignal =
+      isLikelySponsored(item.title) ||
+      isLikelySponsored(item.rawContent) ||
+      isLikelySponsored(embedHtml);
+    if (sponsoredSignal) continue;
 
     rows.push({
       trend_name: item.title.slice(0, 200),
