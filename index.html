@@ -309,14 +309,16 @@
         <p>The week's top makeup and skincare conversations in one place: text posts and videos, crossposted from other platforms.</p>
       </div>
 
-      <div class="card pad comingSoon">
-        <div class="comingSoon-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M21 7v6h-6"/></svg>
-        </div>
-        <h3>Coming soon</h3>
-        <p class="muted">Trending text posts and video links, with sources back to TikTok, Instagram, YouTube, and more, gathered in one weekly view.</p>
+            <div class="small muted" id="trendsUpdated" style="margin-bottom:16px;">Loading trends...</div>
+      <div class="trendsGroup">
+        <h3 class="trendsGroup-title">Today</h3>
+        <div id="trendsToday" class="trendsList"></div>
       </div>
-    </section>
+      <div class="trendsGroup">
+        <h3 class="trendsGroup-title">This week</h3>
+        <div id="trendsWeek" class="trendsList"></div>
+      </div>
+</section>
 
   </main>
 
