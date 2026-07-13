@@ -1,0 +1,9 @@
+{
+  "crons": [
+    {
+      "path": "/api/refresh-trends",
+      "schedule": "0 13 * * *"
+    }
+  ]
+}
+
