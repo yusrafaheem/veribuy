@@ -427,3 +427,10 @@ mark{
 .chatBubble.pending{opacity:.6;font-style:italic}
 .chatInputRow{display:flex;gap:8px;align-items:flex-end;border-top:1px solid var(--line-soft);padding-top:12px}
 .chatInputRow .input{flex:1;resize:none;padding:10px 12px;font-size:13.5px;max-height:120px}
+.trendsGroup{margin-bottom:28px}
+.trendsGroup-title{margin:0 0 12px;font-size:15px;font-weight:750}
+.trendsList{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px}
+.trendCard{display:flex;flex-direction:column}
+.trendCard h4{font-size:15px;line-height:1.35}
+.trendEmbed{margin-top:10px;max-height:520px;overflow:hidden;border-radius:var(--radius-lg)}
+.trendEmbed blockquote{margin:0}
