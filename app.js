@@ -840,6 +840,7 @@ function renderAuthState(session) {
 
   refreshExploreAuthNote();
   loadExploreFeed();
+  loadTrends();
 }
 
 async function signUp() {
