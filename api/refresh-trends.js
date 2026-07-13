@@ -15,7 +15,7 @@ const MAX_NEWS = 10;
 // -------- Source 2: curated real creator posts (TikTok/X post cards) ------
 // Hand-reviewed for organic, non-sponsored captions. TikTok/X don't offer a
 // free, keyless way to auto-discover "latest posts by hashtag," so this list
-// has to be maintained manually â add more { platform, url, creator, topic }
+// has to be maintained manually - add more { platform, url, creator, topic }
 // entries over time. Every post is still re-checked for sponsorship signals
 // at fetch time below using the real caption pulled from its own oEmbed
 // response, not just this list.
@@ -281,7 +281,7 @@ async function buildPostRows() {
       trend_name: post.topic,
       summary: captionText.slice(0, 400) || null,
       platform: post.platform,
-      source_name: `${platformLabel} â ${post.creator}`,
+      source_name: `${platformLabel} - ${post.creator}`,
       source_url: post.url,
       embed_url: post.url,
       embed_html: oembed.html
