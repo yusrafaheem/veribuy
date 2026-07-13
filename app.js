@@ -1198,6 +1198,112 @@ async function postToExplore() {
   await loadExploreFeed();
 }
 
+/* Trends (curated daily from beauty publications, embeds refreshed automatically) */
+let trendsEmbedScriptsLoaded = { twitter: false, tiktok: false };
+
+function ensureTrendEmbedScripts(trends) {
+  const hasTwitter = trends.some((t) => t.platform === "twitter" && t.embed_html);
+  const hasTiktok = trends.some((t) => t.platform === "tiktok" && t.embed_html);
+  if (hasTwitter) {
+    if (!trendsEmbedScriptsLoaded.twitter) {
+      trendsEmbedScriptsLoaded.twitter = true;
+      const s = document.createElement("script");
+      s.src = "https://platform.twitter.com/widgets.js";
+      s.async = true;
+      document.body.appendChild(s);
+    } else if (window.twttr && window.twttr.widgets) {
+      window.twttr.widgets.load();
+    }
+  }
+  if (hasTiktok && !trendsEmbedScriptsLoaded.tiktok) {
+    trendsEmbedScriptsLoaded.tiktok = true;
+    const s = document.createElement("script");
+    s.src = "https://www.tiktok.com/embed.js";
+    s.async = true;
+    document.body.appendChild(s);
+  }
+}
+
+function renderTrendCard(t) {
+  const platformLabel =
+    t.platform === "twitter" ? "X" :
+    t.platform === "tiktok" ? "TikTok" :
+    t.platform === "instagram" ? "Instagram" : "News";
+  const embedBlock = t.embed_html ? `<div class="trendEmbed">${t.embed_html}</div>` : "";
+  const altLink = (t.platform !== "news" && t.embed_url && !t.embed_html)
+    ? `<a class="iconbtn" href="${safeLink(t.embed_url, t.trend_name)}" target="_blank" rel="noopener noreferrer">${ICONS.arrowUpRight}<span>View on ${escapeHtml(platformLabel)}</span></a>`
+    : "";
+  return `
+    <article class="card pad trendCard">
+      <span class="badge brand">${escapeHtml(platformLabel)}</span>
+      <h4 style="margin:10px 0 4px;">${escapeHtml(t.trend_name)}</h4>
+      ${t.summary ? `<p class="small muted">${escapeHtml(t.summary)}</p>` : ""}
+      ${embedBlock}
+      <div class="row" style="margin-top:10px; gap:8px; flex-wrap:wrap;">
+        <a class="iconbtn" href="${safeLink(t.source_url, t.trend_name)}" target="_blank" rel="noopener noreferrer">${ICONS.arrowUpRight}<span>Read on ${escapeHtml(t.source_name)}</span></a>
+        ${altLink}
+      </div>
+    </article>
+  `;
+}
+
+async function loadTrends() {
+  const updatedEl = el("trendsUpdated");
+  const todayOut = el("trendsToday");
+  const weekOut = el("trendsWeek");
+  if (!todayOut || !weekOut) return;
+  if (!sb) {
+    todayOut.innerHTML = `<div class="emptyState">Trends are not available right now. Auth is not configured.</div>`;
+    weekOut.innerHTML = "";
+    return;
+  }
+  todayOut.innerHTML = `<div class="small">Loading today's trends...</div>`;
+  weekOut.innerHTML = "";
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+  const sevenDaysAgoStr = sevenDaysAgo.toISOString().slice(0, 10);
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const { data, error } = await sb
+    .from("trends")
+    .select("id, trend_name, summary, platform, source_name, source_url, embed_url, embed_html, rank, captured_date")
+    .gte("captured_date", sevenDaysAgoStr)
+    .order("captured_date", { ascending: false })
+    .order("rank", { ascending: true })
+    .limit(200);
+  if (error) {
+    todayOut.innerHTML = `<div class="emptyState">Could not load trends: ${escapeHtml(error.message)}</div>`;
+    return;
+  }
+  const rows = data || [];
+  updatedEl && (updatedEl.textContent = rows.length
+    ? `Refreshed daily · last update ${rows[0].captured_date}`
+    : "No trends captured yet.");
+  const todayRows = rows.filter((r) => r.captured_date === todayStr);
+  todayOut.innerHTML = todayRows.length
+    ? todayRows.map(renderTrendCard).join("")
+    : `<div class="emptyState">No trends captured yet today. Check back soon.</div>`;
+  const weekMap = new Map();
+  rows.forEach((r) => {
+    const key = r.trend_name.trim().toLowerCase();
+    const existing = weekMap.get(key);
+    if (!existing) {
+      weekMap.set(key, { ...r, appearances: 1 });
+    } else {
+      existing.appearances += 1;
+      if (r.captured_date > existing.captured_date) {
+        Object.assign(existing, r, { appearances: existing.appearances });
+      }
+    }
+  });
+  const weekRows = Array.from(weekMap.values())
+    .sort((a, b) => b.appearances - a.appearances || a.rank - b.rank)
+    .slice(0, 12);
+  weekOut.innerHTML = weekRows.length
+    ? weekRows.map(renderTrendCard).join("")
+    : `<div class="emptyState">No trends captured yet this week.</div>`;
+  ensureTrendEmbedScripts(rows);
+}
+
 /* AI Chat (backed by /api/chat) */
 let chatHistory = [];
 let chatBusy = false;
@@ -1330,7 +1436,8 @@ function init() {
 
   renderWishlist();
   renderAlerts();
-  runSearch("matte lipstick under $15");
+    loadTrends();
+runSearch("matte lipstick under $15");
 }
 
 init();
